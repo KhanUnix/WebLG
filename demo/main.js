@@ -2,6 +2,16 @@ import * as THREE from 'three';
 import { WebLGThree } from '../src/WebLGThree.js';
 import { LENS_DEFAULTS } from '../src/shaders.js';
 
+const MAIN_LENS_DEFAULTS = {
+    smoothness: 10.0,
+    edgeSpread: 15.22,
+    frosted: 17.4,
+    pinch: 10.8,
+    chroma: 2.0,
+    turbulence: 0.0,
+    liquidity: 0.0,
+};
+
 // ── Three.js Scene ──────────────────────────────────────────
 
 const canvas   = document.getElementById('canvas');
@@ -183,7 +193,7 @@ async function init() {
     const panelCircle = document.getElementById('panel-circle');
     const panelPill   = document.getElementById('panel-pill');
 
-    const lensMain   = weblg.addLens({ element: panelMain });
+    const lensMain   = weblg.addLens({ element: panelMain, ...MAIN_LENS_DEFAULTS });
     const lensCircle = weblg.addLens({ element: panelCircle, smoothness: 20.0 });
     const lensPill   = weblg.addLens({ element: panelPill });
 
@@ -251,13 +261,13 @@ async function init() {
 
     const PARAMS = {
         lens: 'main',
-        smoothness: 10.0,
-        edgeSpread: 20.0,
-        frosted: 3.0,
-        pinch: 5.0,
-        chroma: 0.7,
-        turbulence: 0.0,
-        liquidity: 0.0,
+        smoothness: MAIN_LENS_DEFAULTS.smoothness,
+        edgeSpread: MAIN_LENS_DEFAULTS.edgeSpread,
+        frosted: MAIN_LENS_DEFAULTS.frosted,
+        pinch: MAIN_LENS_DEFAULTS.pinch,
+        chroma: MAIN_LENS_DEFAULTS.chroma,
+        turbulence: MAIN_LENS_DEFAULTS.turbulence,
+        liquidity: MAIN_LENS_DEFAULTS.liquidity,
     };
 
     function syncParamsFromLens(lensKey) {
@@ -335,8 +345,12 @@ async function init() {
     folder.addInput(PARAMS, 'liquidity',  { min: 0, max: 1, step: 0.01 });
 
     pane.addButton({ title: 'Default config' }).on('click', () => {
-        Object.assign(PARAMS, { ...LENS_DEFAULTS, lens: PARAMS.lens });
-        weblg.updateLens(lensMain, LENS_DEFAULTS);
+        if (PARAMS.lens === 'main') {
+            Object.assign(PARAMS, { ...MAIN_LENS_DEFAULTS, lens: PARAMS.lens });
+        } else {
+            Object.assign(PARAMS, { ...LENS_DEFAULTS, lens: PARAMS.lens });
+        }
+        weblg.updateLens(lensMain, MAIN_LENS_DEFAULTS);
         weblg.updateLens(lensCircle, LENS_DEFAULTS);
         weblg.updateLens(lensPill, LENS_DEFAULTS);
         pane.refresh();

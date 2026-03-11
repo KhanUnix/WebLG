@@ -79,7 +79,7 @@ body {
     height: 500px;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, calc(-50% - 36px));
 }
 
 .panel-circle {
@@ -169,7 +169,7 @@ body {
 .panel-pill {
     width: 500px;
     height: 100px;
-    top: 82%;
+    top: 84%;
     left: 50%;
     transform: translateX(-50%);
 }
@@ -229,6 +229,7 @@ p {
     .panel-main {
         width: 280px;
         height: 360px;
+        transform: translate(-50%, calc(-50% - 24px));
     }
 
     .panel-circle {
@@ -241,7 +242,7 @@ p {
     .panel-pill {
         width: min(320px, 90vw);
         height: 72px;
-        top: 85%;
+        top: 87%;
     }
 
     h1 {
@@ -273,6 +274,7 @@ p {
     .panel-main {
         width: 240px;
         height: 300px;
+        transform: translate(-50%, calc(-50% - 18px));
     }
 
     .panel-circle {
@@ -285,6 +287,7 @@ p {
     .panel-pill {
         width: min(260px, 88vw);
         height: 60px;
+        top: 88%;
     }
 
     h1 {
