@@ -30,9 +30,16 @@ export function getDefaultShadersPath() {
 export async function loadShaders(basePath = getDefaultShadersPath()) {
     const base = basePath.endsWith('/') ? basePath : basePath + '/';
     const bust = '?t=' + Date.now();
+    const fetchText = async (url) => {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`WebLG failed to load shader: ${url} (HTTP ${response.status} ${response.statusText})`);
+        }
+        return response.text();
+    };
     const [vertexShader, fragmentShader] = await Promise.all([
-        fetch(base + 'base.vert' + bust).then(r => r.text()),
-        fetch(base + 'glass.frag' + bust).then(r => r.text()),
+        fetchText(base + 'base.vert' + bust),
+        fetchText(base + 'glass.frag' + bust),
     ]);
     return { vertexShader, fragmentShader };
 }

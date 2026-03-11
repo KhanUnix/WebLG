@@ -1,0 +1,33 @@
+{
+  "name": "weblg",
+  "version": "0.1.0",
+  "description": "Liquid Glass effect library for WebGL and Three.js.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "demo": "node scripts/demo-server.mjs"
+  },
+  "peerDependencies": {
+    "three": ">=0.152.0"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "weblg",
+    "webgl",
+    "threejs",
+    "shader",
+    "glass",
+    "frosted-glass"
+  ],
+  "license": "MIT"
+}

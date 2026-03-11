@@ -67,7 +67,14 @@ export class WebLGThree {
     }
 
     addLens(config = {}) {
-        const id = config.id !== undefined ? config.id : this._nextId++;
+        const hasCustomId = config.id !== undefined;
+        const id = hasCustomId ? config.id : this._allocateLensId();
+        if (this._lenses.has(id)) {
+            throw new Error(`WebLGThree lens id "${id}" already exists.`);
+        }
+        if (hasCustomId && Number.isInteger(id) && id >= this._nextId) {
+            this._nextId = id + 1;
+        }
         this._lenses.set(id, { ...LENS_DEFAULTS, ...config, id });
         return id;
     }
@@ -91,10 +98,14 @@ export class WebLGThree {
 
     render(time = 0) {
         const renderer = this._renderer;
+        const canvas = renderer.domElement;
+        const canvasRect = canvas && typeof canvas.getBoundingClientRect === 'function'
+            ? canvas.getBoundingClientRect()
+            : null;
         renderer.getSize(_size);
         const dpr  = renderer.getPixelRatio();
-        const cssW = _size.x;
-        const cssH = _size.y;
+        const cssW = canvasRect ? canvasRect.width : _size.x;
+        const cssH = canvasRect ? canvasRect.height : _size.y;
         const pixW = cssW * dpr;
         const pixH = cssH * dpr;
 
@@ -109,8 +120,10 @@ export class WebLGThree {
             let x, y, w, h;
             if (lens.element) {
                 const r = lens.element.getBoundingClientRect();
-                x = r.left   * dpr;
-                y = (cssH - r.bottom) * dpr;
+                const left = canvasRect ? canvasRect.left : 0;
+                const bottom = canvasRect ? canvasRect.bottom : cssH;
+                x = (r.left - left) * dpr;
+                y = (bottom - r.bottom) * dpr;
                 w = r.width  * dpr;
                 h = r.height * dpr;
             } else if (lens.rect) {
@@ -144,5 +157,14 @@ export class WebLGThree {
         this._material.dispose();
         this._mesh.geometry.dispose();
         this._lenses.clear();
+    }
+
+    // ── Internal ────────────────────────────────────────────
+
+    _allocateLensId() {
+        let id = this._nextId;
+        while (this._lenses.has(id)) id++;
+        this._nextId = id + 1;
+        return id;
     }
 }

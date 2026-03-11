@@ -5,17 +5,91 @@ import { LENS_DEFAULTS } from '../src/shaders.js';
 // ── Three.js Scene ──────────────────────────────────────────
 
 const canvas   = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
+const CONTEXT_ATTRS = {
+    alpha: true,
+    antialias: true,
+    depth: true,
+    stencil: false,
+    premultipliedAlpha: true,
+    preserveDrawingBuffer: false,
+    powerPreference: 'high-performance',
+};
 
-const scene  = new THREE.Scene();
-scene.background = new THREE.Color(0x080818);
+function showFatalOverlay(title, message) {
+    const existing = document.querySelector('.fatal-overlay');
+    if (existing) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'fatal-overlay';
+    overlay.innerHTML = `
+        <p class="fatal-overlay-title">${title}</p>
+        <p class="fatal-overlay-text">${message}</p>
+    `;
+    document.body.appendChild(overlay);
+}
 
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 0.5, 6);
+function tryGetContext(name, attrs) {
+    try {
+        const gl = canvas.getContext(name, attrs);
+        if (!gl) return null;
+        if (typeof gl.isContextLost === 'function' && gl.isContextLost()) return null;
+        return gl;
+    } catch {
+        return null;
+    }
+}
+
+function createRendererWithFallback() {
+    const attempts = [
+        { name: 'webgl2', attrs: CONTEXT_ATTRS },
+        { name: 'webgl', attrs: CONTEXT_ATTRS },
+        { name: 'experimental-webgl', attrs: CONTEXT_ATTRS },
+        { name: 'webgl', attrs: { ...CONTEXT_ATTRS, antialias: false } },
+        { name: 'experimental-webgl', attrs: { ...CONTEXT_ATTRS, antialias: false } },
+    ];
+
+    for (const attempt of attempts) {
+        const context = tryGetContext(attempt.name, attempt.attrs);
+        if (!context) continue;
+        try {
+            const renderer = new THREE.WebGLRenderer({
+                canvas,
+                context,
+                antialias: false,
+                alpha: true,
+            });
+            return renderer;
+        } catch (err) {
+            console.warn(`WebLG demo: renderer init failed for ${attempt.name}.`, err);
+        }
+    }
+    return null;
+}
+
+const renderer = createRendererWithFallback();
+if (!renderer) {
+    showFatalOverlay(
+        'WebGL unavailable',
+        'Could not initialize WebGL on this browser/device. Enable hardware acceleration or update GPU drivers.',
+    );
+} else {
+    canvas.addEventListener('webglcontextlost', (event) => {
+        event.preventDefault();
+        showFatalOverlay(
+            'WebGL context lost',
+            'The GPU context was lost. Reload the page and reduce graphics settings if this keeps happening.',
+        );
+    });
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+
+    const scene  = new THREE.Scene();
+    scene.background = new THREE.Color(0x080818);
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0.5, 6);
 
 // ── Landscape background (cover: adapts to viewport) ───────────
 
@@ -320,4 +394,11 @@ async function init() {
     requestAnimationFrame(animate);
 }
 
-init();
+    init().catch((error) => {
+        console.error('WebLG demo initialization failed:', error);
+        showFatalOverlay(
+            'Initialization failed',
+            'The demo could not finish setup. Check the browser console for details.',
+        );
+    });
+}

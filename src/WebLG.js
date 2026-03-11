@@ -98,7 +98,14 @@ export class WebLG {
     }
 
     addLens(config = {}) {
-        const id = config.id !== undefined ? config.id : this._nextId++;
+        const hasCustomId = config.id !== undefined;
+        const id = hasCustomId ? config.id : this._allocateLensId();
+        if (this._lenses.has(id)) {
+            throw new Error(`WebLG lens id "${id}" already exists.`);
+        }
+        if (hasCustomId && Number.isInteger(id) && id >= this._nextId) {
+            this._nextId = id + 1;
+        }
         this._lenses.set(id, { ...LENS_DEFAULTS, ...config, id });
         return id;
     }
@@ -127,14 +134,24 @@ export class WebLG {
 
         const gl  = this.gl;
         const dpr = this._dpr;
-        const cssH = this._height / dpr;
+        const canvasRect = this._getCanvasRect();
+        const cssH = canvasRect ? canvasRect.height : (this._height / dpr);
 
         const prev = {
             program:   gl.getParameter(gl.CURRENT_PROGRAM),
             blend:     gl.isEnabled(gl.BLEND),
             depthTest: gl.isEnabled(gl.DEPTH_TEST),
             cullFace:  gl.isEnabled(gl.CULL_FACE),
+            viewport:  gl.getParameter(gl.VIEWPORT),
+            arrayBuffer: gl.getParameter(gl.ARRAY_BUFFER_BINDING),
+            activeTexture: gl.getParameter(gl.ACTIVE_TEXTURE),
+            tex0Binding2D: this._getTextureBinding(gl.TEXTURE0),
         };
+        const prevActiveBinding2D = prev.activeTexture !== gl.TEXTURE0
+            ? this._getTextureBinding(prev.activeTexture)
+            : prev.tex0Binding2D;
+        const prevPosAttrib = this._captureVertexAttribState(this._aPos);
+        const prevUvAttrib = this._captureVertexAttribState(this._aUv);
 
         gl.useProgram(this._program);
         gl.disable(gl.DEPTH_TEST);
@@ -152,7 +169,7 @@ export class WebLG {
         let idx = 0;
         for (const [, lens] of this._lenses) {
             if (idx >= MAX_LENSES) break;
-            const [x, y, w, h] = this._lensRect(lens, dpr, cssH);
+            const [x, y, w, h] = this._lensRect(lens, dpr, cssH, canvasRect);
             gl.uniform4f(this._u.rects[idx], x, y, w, h);
             gl.uniform4f(this._u.params0[idx], lens.smoothness, lens.edgeSpread, lens.frosted, lens.pinch);
             gl.uniform4f(this._u.params1[idx], lens.chroma, lens.turbulence, lens.liquidity, 0);
@@ -170,6 +187,18 @@ export class WebLG {
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
+        this._restoreVertexAttribState(prevUvAttrib);
+        this._restoreVertexAttribState(prevPosAttrib);
+        gl.bindBuffer(gl.ARRAY_BUFFER, prev.arrayBuffer);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, prev.tex0Binding2D);
+        if (prev.activeTexture !== gl.TEXTURE0) {
+            gl.activeTexture(prev.activeTexture);
+            gl.bindTexture(gl.TEXTURE_2D, prevActiveBinding2D);
+        } else {
+            gl.activeTexture(prev.activeTexture);
+        }
+        gl.viewport(prev.viewport[0], prev.viewport[1], prev.viewport[2], prev.viewport[3]);
         gl.useProgram(prev.program);
         if (prev.blend)     gl.enable(gl.BLEND);     else gl.disable(gl.BLEND);
         if (prev.depthTest) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
@@ -186,10 +215,69 @@ export class WebLG {
 
     // ── Internal ────────────────────────────────────────────
 
-    _lensRect(lens, dpr, cssH) {
+    _allocateLensId() {
+        let id = this._nextId;
+        while (this._lenses.has(id)) id++;
+        this._nextId = id + 1;
+        return id;
+    }
+
+    _getCanvasRect() {
+        const canvas = this.gl && this.gl.canvas;
+        if (canvas && typeof canvas.getBoundingClientRect === 'function') {
+            return canvas.getBoundingClientRect();
+        }
+        return null;
+    }
+
+    _getTextureBinding(textureUnit) {
+        const gl = this.gl;
+        const prevActive = gl.getParameter(gl.ACTIVE_TEXTURE);
+        gl.activeTexture(textureUnit);
+        const binding = gl.getParameter(gl.TEXTURE_BINDING_2D);
+        gl.activeTexture(prevActive);
+        return binding;
+    }
+
+    _captureVertexAttribState(index) {
+        if (index < 0) return null;
+        const gl = this.gl;
+        return {
+            index,
+            enabled: gl.getVertexAttrib(index, gl.VERTEX_ATTRIB_ARRAY_ENABLED),
+            size: gl.getVertexAttrib(index, gl.VERTEX_ATTRIB_ARRAY_SIZE),
+            type: gl.getVertexAttrib(index, gl.VERTEX_ATTRIB_ARRAY_TYPE),
+            normalized: gl.getVertexAttrib(index, gl.VERTEX_ATTRIB_ARRAY_NORMALIZED),
+            stride: gl.getVertexAttrib(index, gl.VERTEX_ATTRIB_ARRAY_STRIDE),
+            buffer: gl.getVertexAttrib(index, gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING),
+            pointer: gl.getVertexAttribOffset(index, gl.VERTEX_ATTRIB_ARRAY_POINTER),
+        };
+    }
+
+    _restoreVertexAttribState(state) {
+        if (!state) return;
+        const gl = this.gl;
+        if (state.buffer) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, state.buffer);
+            gl.vertexAttribPointer(
+                state.index,
+                state.size,
+                state.type,
+                state.normalized,
+                state.stride,
+                state.pointer,
+            );
+        }
+        if (state.enabled) gl.enableVertexAttribArray(state.index);
+        else gl.disableVertexAttribArray(state.index);
+    }
+
+    _lensRect(lens, dpr, cssH, canvasRect) {
         if (lens.element) {
             const r = lens.element.getBoundingClientRect();
-            return [r.left * dpr, (cssH - r.bottom) * dpr, r.width * dpr, r.height * dpr];
+            const left = canvasRect ? canvasRect.left : 0;
+            const bottom = canvasRect ? canvasRect.bottom : cssH;
+            return [(r.left - left) * dpr, (bottom - r.bottom) * dpr, r.width * dpr, r.height * dpr];
         }
         if (lens.rect) {
             const { x, y, width, height } = lens.rect;

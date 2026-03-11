@@ -6,6 +6,8 @@ A WebGL-based "Liquid Glass" effect (Apple-style frosted glass). Creates glass l
 - `WebLGThree` — native Three.js adapter (recommended)
 - `WebLG` — pure WebGL core, zero dependencies (works with any GL context)
 
+`WebLGThree` requires `three` in your app dependencies.
+
 ## Project Structure
 
 ```
@@ -82,16 +84,15 @@ Then use the same import pattern as Option B, pointing to `lib/WebLG/src/`.
 
 ### Run the demo
 
-After cloning:
+After cloning, run:
 
 ```bash
-cd WebLG
 npm run demo
 ```
 
 Then open **http://localhost:4000/demo/** in your browser.
 
-No npm dependencies — the library is zero-dependency. Pure ES modules.
+Pure ES modules.
 
 ## Three.js Integration (WebLGThree)
 
@@ -121,7 +122,7 @@ Three.js scene → RenderTarget (texture)
 </div>
 
 <script type="importmap">
-{ "imports": { "three": "https://esm.sh/three@0.170.0" } }
+{ "imports": { "three": "https://esm.sh/three@0.152.2" } }
 </script>
 
 <script type="module">
@@ -212,6 +213,7 @@ Adds a lens. Returns its `id` (used for update/remove). Up to 16 lenses.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
+| `id` | `number \| string` | auto-generated | Optional custom lens id. Must be unique |
 | `element` | `HTMLElement` | `null` | DOM element — the lens automatically follows its `getBoundingClientRect()` every frame |
 | `rect` | `{x, y, width, height}` | `null` | Manual position in CSS pixels (x,y = top-left corner). Ignored if `element` is set |
 | `smoothness` | `number` | `10.0` | Corner radius (0 = sharp, 20 = very rounded). When width ≈ height, automatically becomes a perfect circle |
@@ -274,7 +276,7 @@ weblg.render(timeInSeconds);
 
 The fragment shader (`glass.frag`) works in screen-space:
 
-1. **SDF loop** — For each pixel, computes the signed distance to every lens (rounded rectangles via `sdRoundRect`). Finds the closest lens.
+1. **SDF loop** — For each pixel, computes the signed distance to every lens (squircle-aware rounded rectangles via `sdLensShape`). Finds the closest lens.
 2. **Outside all lenses** (`distance > 0`) — Passthrough: renders the background as-is.
 3. **Lens center** (`distance > edgeSpread`) — Applies frosted blur (golden spiral, 32 dithered samples).
 4. **Lens border** (`distance ≤ edgeSpread`) — Applies frosted blur + displacement (pinch) + chromatic aberration + optional turbulence.
@@ -283,9 +285,11 @@ The blur is uniform across the entire lens surface — the background appears as
 
 ## Technical Notes
 
-- Lens coordinates use **CSS pixels**. DPR conversion is automatic.
+- Lens coordinates use **CSS pixels relative to the canvas**. DPR conversion is automatic.
 - When `element` is provided, `getBoundingClientRect()` is read every `render()` call — lenses automatically follow DOM elements (drag, scroll, resize).
 - The shader supports up to **16 simultaneous lenses** (uniform arrays).
 - Nearly-square rectangles (`|width - height| < 5px`) automatically become **perfect circles**.
 - `shadersPath` must point to a folder accessible via `fetch()` containing `base.vert` and `glass.frag`.
-- GL state is saved/restored in the pure WebGL version. The Three.js adapter handles state through `renderer.autoClear` and render target management.
+- Lens ids are unique; `addLens({ id })` throws if the id already exists.
+- Border direction is derived from the SDF gradient, keeping edge effects visually consistent across flat sides and rounded corners.
+- GL state is restored in the pure WebGL version (program, enables, viewport, texture unit/bindings, array buffer, and touched vertex attributes). The Three.js adapter handles state through `renderer.autoClear` and render target management.
