@@ -4,6 +4,7 @@ varying vec2 vUv;
 uniform sampler2D tMap;
 uniform vec2 uResolution;
 uniform float uTime;
+uniform vec2 uLightDirection;
 
 #define MAX_LENSES 16
 uniform int uLensCount;
@@ -13,25 +14,32 @@ uniform vec4 uLensParams1[MAX_LENSES]; // chroma, turbulence, liquidity, reserve
 
 const float TAU = 6.28318530718;
 
-// Golden-spiral frosted blur (32 samples, dithered)
+// Dithered 32-sample golden-spiral blur. Each sample rotates by a constant
+// angle; only the initial per-pixel orientation requires trigonometry.
 vec4 frostedBlur(sampler2D tex, vec2 uv, float blurAmount) {
+#ifdef WEBLG_CLEAR_ONLY
+    return texture2D(tex, uv);
+#else
     if (blurAmount <= 0.01) return texture2D(tex, uv);
 
     vec4 color = vec4(0.0);
     float total = 0.0;
     vec2 radius = vec2(blurAmount * 5.0) / uResolution;
     float noise = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
+    float angle = noise * TAU;
+    vec2 direction = vec2(cos(angle), sin(angle));
+    const mat2 golden = mat2(-0.737368857997, 0.675490316183, -0.675490316183, -0.737368857997);
 
     for (float i = 0.0; i < 32.0; i++) {
         float r = (i + 1.0) / 32.0;
-        float theta = i * 2.3999632 + (noise * TAU);
-        vec2 offset = vec2(cos(theta), sin(theta)) * r * radius;
         float weight = exp(-r * r * 2.0);
-        color += texture2D(tex, uv + offset) * weight;
+        color += texture2D(tex, uv + direction * r * radius) * weight;
         total += weight;
+        direction = golden * direction;
     }
 
     return color / total;
+#endif
 }
 
 // Simplex noise
@@ -88,6 +96,74 @@ vec2 lensNormal(vec2 p, vec2 b, float r, float roundBlend) {
     return g / gl;
 }
 
+vec4 shadeLens(vec2 uv, vec2 pixelCoord, vec2 local, vec2 halfSize,
+               float corner, float roundness, float d, vec4 params0, vec4 params1) {
+    float edgeSpread = params0.y;
+    float frosted    = params0.z;
+    float pinch      = params0.w;
+    float chroma     = params1.x;
+    float turbulence = params1.y;
+    float liquidity  = params1.z;
+
+
+
+    // Centre: frosted blur only
+    if (d > edgeSpread
+#ifndef WEBLG_CLEAR_ONLY
+        || pinch == 0.0 || edgeSpread == 0.0
+#endif
+    ) {
+        return frostedBlur(tMap, uv, frosted);
+    }
+
+    // Edge: pinch compression + chroma + turbulence
+    float t           = d / max(edgeSpread, 1.0);
+    float compression = pow(1.0 - t, 2.0);
+
+    vec2 dir = lensNormal(local, halfSize, corner, roundness);
+
+    if (turbulence > 0.0) {
+        float timeOff = uTime * liquidity;
+        vec2  noiseUV = pixelCoord / uResolution.y;
+        dir += vec2(
+            snoise(noiseUV * turbulence + timeOff),
+            snoise(noiseUV * turbulence + timeOff + 100.0)
+        ) * 0.1;
+    }
+    float dirLen = length(dir);
+    dir = (dirLen > 1e-4) ? (dir / dirLen) : vec2(0.0, 1.0);
+
+    float dispPx = compression * edgeSpread * pinch;
+
+    vec2 dispR = (-dir * dispPx * (1.0 - chroma * 0.1)) / uResolution;
+    vec2 dispG = (-dir * dispPx)                         / uResolution;
+    vec2 dispB = (-dir * dispPx * (1.0 + chroma * 0.1)) / uResolution;
+
+#ifndef WEBLG_CLEAR_ONLY
+    // Keep clear glass in mixed scenes out of the blur function altogether.
+    if (frosted <= 0.01) {
+        vec4 colR = texture2D(tMap, uv + dispR);
+        vec4 colG = texture2D(tMap, uv + dispG);
+        vec4 colB = texture2D(tMap, uv + dispB);
+        return vec4(colR.r, colG.g, colB.b, (colR.a + colG.a + colB.a) / 3.0);
+    }
+
+    // All three channels sample the same image when dispersion is disabled.
+    if (chroma == 0.0) {
+        return frostedBlur(tMap, uv + dispG, frosted);
+    }
+#endif
+
+    vec4 colR = frostedBlur(tMap, uv + dispR, frosted);
+    vec4 colG = frostedBlur(tMap, uv + dispG, frosted);
+    vec4 colB = frostedBlur(tMap, uv + dispB, frosted);
+
+    float finalAlpha = (colR.a + colG.a + colB.a) / 3.0;
+    vec3  finalRGB   = vec3(colR.r, colG.g, colB.b);
+
+    return vec4(finalRGB, finalAlpha);
+}
+
 void main() {
     vec2 uv = vUv;
     vec2 pixelCoord = uv * uResolution;
@@ -113,8 +189,12 @@ void main() {
         float cr = smoothness * smoothness * min(rect.z, rect.w) * 0.01;
         cr = clamp(cr, 0.0, min(halfSize.x, halfSize.y));
 
-        // Auto-circle when roughly square
-        if (abs(rect.z - rect.w) < 5.0) {
+        if (smoothness < 0.0) {
+            cr = clamp(-smoothness - 1.0, 0.0, min(halfSize.x, halfSize.y));
+            roundBlend = 1.0;
+        }
+        // Preserve legacy auto-circles unless an explicit radius was supplied.
+        else if (abs(rect.z - rect.w) < 5.0) {
             cr = min(halfSize.x, halfSize.y);
             roundBlend = 1.0;
         }
@@ -135,55 +215,42 @@ void main() {
     }
 
     // Outside all lenses: passthrough background
-    if (minDist > 0.0) {
+    if (minDist >
+#ifdef WEBLG_EDGE_AA
+        0.75
+#else
+        0.0
+#endif
+    ) {
         gl_FragColor = texture2D(tMap, uv);
         return;
     }
 
-    float edgeSpread = activeP0.y;
-    float frosted    = activeP0.z;
-    float pinch      = activeP0.w;
-    float chroma     = activeP1.x;
-    float turbulence = activeP1.y;
-    float liquidity  = activeP1.z;
-
+#ifdef WEBLG_EDGE_AA
+    float d = max(0.0, -minDist);
+#else
     float d = abs(minDist);
-
-    // Centre: frosted blur only
-    if (d > edgeSpread) {
-        gl_FragColor = frostedBlur(tMap, uv, frosted);
-        return;
+#endif
+    vec2 local = pixelCoord - activeCenter;
+    vec4 colour = shadeLens(uv, pixelCoord, local, activeHalfSize, activeCorner,
+                           activeRound, d, activeP0, activeP1);
+    float rimWidth = floor(activeP1.w / 256.0) / 8.0;
+    float rimStrength = mod(activeP1.w, 256.0) / 255.0;
+    if (rimStrength > 0.0 && d < rimWidth) {
+        vec2 normal = lensNormal(local, activeHalfSize, activeCorner, activeRound);
+        float facing = dot(normal, uLightDirection);
+        float light = max(facing, 0.0) + 0.55 * max(-facing, 0.0);
+        float band = pow(max(0.0, 1.0 - d / max(rimWidth, 0.125)), 1.2);
+        float shine = rimStrength * band * (0.18 + 0.82 * pow(light, 1.4));
+        colour.rgb = mix(colour.rgb, vec3(1.0), shine);
     }
-
-    // Edge: pinch compression + chroma + turbulence
-    float t           = d / max(edgeSpread, 1.0);
-    float compression = pow(1.0 - t, 2.0);
-
-    vec2 dir = lensNormal(pixelCoord - activeCenter, activeHalfSize, activeCorner, activeRound);
-
-    if (turbulence > 0.0) {
-        float timeOff = uTime * liquidity;
-        vec2  noiseUV = pixelCoord / uResolution.y;
-        dir += vec2(
-            snoise(noiseUV * turbulence + timeOff),
-            snoise(noiseUV * turbulence + timeOff + 100.0)
-        ) * 0.1;
+#ifdef WEBLG_EDGE_AA
+    // Analytic subpixel coverage of the signed-distance contour. No MSAA,
+    // extra framebuffer or derivative extension is required (WebGL 1 and 2).
+    if (minDist > -0.75) {
+        float coverage = 1.0 - smoothstep(-0.75, 0.75, minDist);
+        colour = mix(texture2D(tMap, uv), colour, coverage);
     }
-    float dirLen = length(dir);
-    dir = (dirLen > 1e-4) ? (dir / dirLen) : vec2(0.0, 1.0);
-
-    float dispPx = compression * edgeSpread * pinch;
-
-    vec2 dispR = (-dir * dispPx * (1.0 - chroma * 0.1)) / uResolution;
-    vec2 dispG = (-dir * dispPx)                         / uResolution;
-    vec2 dispB = (-dir * dispPx * (1.0 + chroma * 0.1)) / uResolution;
-
-    vec4 colR = frostedBlur(tMap, uv + dispR, frosted);
-    vec4 colG = frostedBlur(tMap, uv + dispG, frosted);
-    vec4 colB = frostedBlur(tMap, uv + dispB, frosted);
-
-    float finalAlpha = (colR.a + colG.a + colB.a) / 3.0;
-    vec3  finalRGB   = vec3(colR.r, colG.g, colB.b);
-
-    gl_FragColor = vec4(finalRGB, finalAlpha);
+#endif
+    gl_FragColor = colour;
 }

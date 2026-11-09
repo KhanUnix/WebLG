@@ -1,0 +1,98 @@
+{
+  "benchmark": {
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "width": 640,
+    "height": 400,
+    "measurement": "Median of five alternating batches of two frames, with a full synchronous readPixels per batch. Includes readback overhead; not display FPS.",
+    "results": [
+      {
+        "name": "3 blurred lenses",
+        "beforeMs": 326.85,
+        "afterMs": 320.1,
+        "speedup": 1.02,
+        "timings": {
+          "reference": [
+            315.0500000715256,
+            336.5500000715256,
+            326.85000002384186,
+            307.64999997615814,
+            328.5500000715256
+          ],
+          "current": [
+            313.14999997615814,
+            311.39999997615814,
+            320.35000002384186,
+            320.09999990463257,
+            329.84999990463257
+          ]
+        }
+      },
+      {
+        "name": "achromatic blur",
+        "beforeMs": 424.65,
+        "afterMs": 254.7,
+        "speedup": 1.67,
+        "timings": {
+          "reference": [
+            456.2000000476837,
+            415.60000002384186,
+            439.6999999284744,
+            409.89999997615814,
+            424.64999997615814
+          ],
+          "current": [
+            242.25,
+            241.54999995231628,
+            270.3000000715256,
+            254.70000004768372,
+            370.7000000476837
+          ]
+        }
+      },
+      {
+        "name": "16 lenses",
+        "beforeMs": 766.7,
+        "afterMs": 725.8,
+        "speedup": 1.06,
+        "timings": {
+          "reference": [
+            766.6999999284744,
+            824.2000000476837,
+            731.5999999046326,
+            881.5999999046326,
+            730.25
+          ],
+          "current": [
+            748.8000000715256,
+            725.7999999523163,
+            729.5500000715256,
+            681.8500000238419,
+            713.3000000715256
+          ]
+        }
+      },
+      {
+        "name": "clear glass",
+        "beforeMs": 92,
+        "afterMs": 73.65,
+        "speedup": 1.25,
+        "timings": {
+          "reference": [
+            92,
+            91.25,
+            94.65000009536743,
+            87.79999995231628,
+            115.45000004768372
+          ],
+          "current": [
+            73.64999997615814,
+            76.20000004768372,
+            72.75,
+            79.70000004768372,
+            72.69999992847443
+          ]
+        }
+      }
+    ]
+  }
+}

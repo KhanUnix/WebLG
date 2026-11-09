@@ -1,4 +1,5 @@
 import { LENS_DEFAULTS, MAX_LENSES, loadShaders, getDefaultShadersPath } from './shaders.js';
+import { createLensUniforms, writeLensUniforms } from './lens-uniforms.js';
 
 /**
  * Pure WebGL Liquid Glass renderer.
@@ -18,15 +19,30 @@ export class WebLG {
     }
 
     constructor(gl, vertexShader, fragmentShader, options = {}) {
+        if (options.antialiasEdges) {
+            fragmentShader = fragmentShader.replace(/^(\s*#version[^\n]*\n)?/, '$1#define WEBLG_EDGE_AA 1\n');
+        }
         this.gl = gl;
+        this._preserveState = options.preserveState !== false;
         this._lenses = new Map();
         this._nextId = 0;
         this._width = gl.canvas.width;
         this._height = gl.canvas.height;
         this._dpr = options.dpr ?? (typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1);
         this._bgTexture = null;
+        this.setLightAngle(options.lightAngle ?? 135);
+        this._vertexShader = vertexShader;
+        this._fragmentShader = fragmentShader;
+        this._variants = new Map();
+        this._lensUniforms = createLensUniforms();
+        this._lensViews = Array.from({ length: MAX_LENSES + 1 }, (_, count) => ({
+            rects: this._lensUniforms.rects.subarray(0, count * 4),
+            params0: this._lensUniforms.params0.subarray(0, count * 4),
+            params1: this._lensUniforms.params1.subarray(0, count * 4),
+        }));
 
         this._compileProgram(vertexShader, fragmentShader);
+        this._rememberVariant(false);
         this._createGeometry();
     }
 
@@ -67,10 +83,11 @@ export class WebLG {
             tMap:        loc('tMap'),
             uResolution: loc('uResolution'),
             uTime:       loc('uTime'),
+            light:       loc('uLightDirection'),
             uLensCount:  loc('uLensCount'),
-            rects:   Array.from({ length: MAX_LENSES }, (_, i) => loc(`uLensRects[${i}]`)),
-            params0: Array.from({ length: MAX_LENSES }, (_, i) => loc(`uLensParams0[${i}]`)),
-            params1: Array.from({ length: MAX_LENSES }, (_, i) => loc(`uLensParams1[${i}]`)),
+            rects:   loc('uLensRects[0]'),
+            params0: loc('uLensParams0[0]'),
+            params1: loc('uLensParams1[0]'),
         };
 
         this._aPos = gl.getAttribLocation(this._program, 'position');
@@ -92,6 +109,12 @@ export class WebLG {
     }
 
     // ── Public API ──────────────────────────────────────────
+
+    setLightAngle(degrees = 135) {
+        const angle = degrees * Math.PI / 180;
+        this._lightX = Math.cos(angle);
+        this._lightY = Math.sin(angle);
+    }
 
     setBackground(webglTexture) {
         this._bgTexture = webglTexture;
@@ -129,15 +152,24 @@ export class WebLG {
         if (dpr !== undefined) this._dpr = dpr;
     }
 
-    render(time = 0) {
+    render(time = 0, canvasRect = this._getCanvasRect()) {
         if (!this._bgTexture) return;
 
         const gl  = this.gl;
         const dpr = this._dpr;
-        const canvasRect = this._getCanvasRect();
         const cssH = canvasRect ? canvasRect.height : (this._height / dpr);
 
-        const prev = {
+        let idx = 0;
+        let clearOnly = true;
+        for (const lens of this._lenses.values()) {
+            if (idx >= MAX_LENSES) break;
+            writeLensUniforms(this._lensUniforms, idx, lens, dpr, cssH, canvasRect);
+            if (!(lens.frosted <= 0.01)) clearOnly = false;
+            idx++;
+        }
+        this._selectVariant(idx > 0 && clearOnly);
+
+        const prev = this._preserveState ? {
             program:   gl.getParameter(gl.CURRENT_PROGRAM),
             blend:     gl.isEnabled(gl.BLEND),
             depthTest: gl.isEnabled(gl.DEPTH_TEST),
@@ -146,12 +178,12 @@ export class WebLG {
             arrayBuffer: gl.getParameter(gl.ARRAY_BUFFER_BINDING),
             activeTexture: gl.getParameter(gl.ACTIVE_TEXTURE),
             tex0Binding2D: this._getTextureBinding(gl.TEXTURE0),
-        };
-        const prevActiveBinding2D = prev.activeTexture !== gl.TEXTURE0
+        } : null;
+        const prevActiveBinding2D = prev && prev.activeTexture !== gl.TEXTURE0
             ? this._getTextureBinding(prev.activeTexture)
-            : prev.tex0Binding2D;
-        const prevPosAttrib = this._captureVertexAttribState(this._aPos);
-        const prevUvAttrib = this._captureVertexAttribState(this._aUv);
+            : prev?.tex0Binding2D;
+        const prevPosAttrib = prev ? this._captureVertexAttribState(this._aPos) : null;
+        const prevUvAttrib = prev ? this._captureVertexAttribState(this._aUv) : null;
 
         gl.useProgram(this._program);
         gl.disable(gl.DEPTH_TEST);
@@ -165,15 +197,13 @@ export class WebLG {
 
         gl.uniform2f(this._u.uResolution, this._width, this._height);
         gl.uniform1f(this._u.uTime, time);
+        gl.uniform2f(this._u.light, this._lightX, this._lightY);
 
-        let idx = 0;
-        for (const [, lens] of this._lenses) {
-            if (idx >= MAX_LENSES) break;
-            const [x, y, w, h] = this._lensRect(lens, dpr, cssH, canvasRect);
-            gl.uniform4f(this._u.rects[idx], x, y, w, h);
-            gl.uniform4f(this._u.params0[idx], lens.smoothness, lens.edgeSpread, lens.frosted, lens.pinch);
-            gl.uniform4f(this._u.params1[idx], lens.chroma, lens.turbulence, lens.liquidity, 0);
-            idx++;
+        if (idx > 0) {
+            const view = this._lensViews[idx];
+            gl.uniform4fv(this._u.rects, view.rects);
+            gl.uniform4fv(this._u.params0, view.params0);
+            gl.uniform4fv(this._u.params1, view.params1);
         }
         gl.uniform1i(this._u.uLensCount, idx);
 
@@ -187,6 +217,7 @@ export class WebLG {
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
+        if (!prev) return;
         this._restoreVertexAttribState(prevUvAttrib);
         this._restoreVertexAttribState(prevPosAttrib);
         gl.bindBuffer(gl.ARRAY_BUFFER, prev.arrayBuffer);
@@ -207,13 +238,36 @@ export class WebLG {
 
     dispose() {
         const gl = this.gl;
-        if (this._program) gl.deleteProgram(this._program);
+        for (const variant of this._variants.values()) gl.deleteProgram(variant.program);
+        this._variants.clear();
         if (this._posBuf)  gl.deleteBuffer(this._posBuf);
         if (this._uvBuf)   gl.deleteBuffer(this._uvBuf);
         this._lenses.clear();
     }
 
     // ── Internal ────────────────────────────────────────────
+
+    _rememberVariant(clearOnly) {
+        this._variants.set(clearOnly, {
+            program: this._program, uniforms: this._u,
+            position: this._aPos, uv: this._aUv,
+        });
+    }
+
+    _selectVariant(clearOnly) {
+        if (!this._variants.has(clearOnly)) {
+            // Compile lazily once. No extra sampler/uniform budget, rendering
+            // pass or API setting is needed for an entirely clear scene.
+            const source = this._fragmentShader.replace(/^(\s*#version[^\n]*\n)?/, '$1#define WEBLG_CLEAR_ONLY 1\n');
+            this._compileProgram(this._vertexShader, source);
+            this._rememberVariant(clearOnly);
+        }
+        const variant = this._variants.get(clearOnly);
+        this._program = variant.program;
+        this._u = variant.uniforms;
+        this._aPos = variant.position;
+        this._aUv = variant.uv;
+    }
 
     _allocateLensId() {
         let id = this._nextId;
@@ -272,17 +326,4 @@ export class WebLG {
         else gl.disableVertexAttribArray(state.index);
     }
 
-    _lensRect(lens, dpr, cssH, canvasRect) {
-        if (lens.element) {
-            const r = lens.element.getBoundingClientRect();
-            const left = canvasRect ? canvasRect.left : 0;
-            const bottom = canvasRect ? canvasRect.bottom : cssH;
-            return [(r.left - left) * dpr, (bottom - r.bottom) * dpr, r.width * dpr, r.height * dpr];
-        }
-        if (lens.rect) {
-            const { x, y, width, height } = lens.rect;
-            return [x * dpr, (cssH - y - height) * dpr, width * dpr, height * dpr];
-        }
-        return [0, 0, 0, 0];
-    }
 }

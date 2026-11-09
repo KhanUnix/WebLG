@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-07",
+  "environment": "Chromium 1248, SwiftShader software renderer, shared VM; completed GPU readback included; not physical-device/display FPS",
+  "baseline": "87b15ab Studio compositor",
+  "measurement": "3 rotating-order rounds, 2 completed frames per scene per round, warmed programs",
+  "targetFrameBudgetMs": 8.333333333333334,
+  "stage": {
+    "comparisons": 42,
+    "maximumDelta": 0
+  },
+  "benchmark": [
+    {
+      "name": "previous-demo",
+      "width": 360,
+      "height": 540,
+      "medianCompletedMs": 479.7999999523163,
+      "synchronousStateReads": 30,
+      "averageGlassPixels": 972000,
+      "averagePasses": 6
+    },
+    {
+      "name": "previous-pipeline-clear",
+      "width": 360,
+      "height": 540,
+      "medianCompletedMs": 328.5499999523163,
+      "synchronousStateReads": 30,
+      "averageGlassPixels": 972000,
+      "averagePasses": 6
+    },
+    {
+      "name": "cached-clear",
+      "width": 360,
+      "height": 540,
+      "medianCompletedMs": 13.449999928474426,
+      "synchronousStateReads": 0,
+      "averageGlassPixels": 7921,
+      "averagePasses": 1
+    }
+  ]
+}

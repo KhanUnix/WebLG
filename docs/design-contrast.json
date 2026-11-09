@@ -1,0 +1,44 @@
+[
+  {
+    "role": "Content / page, light",
+    "foreground": "#1d1d1f",
+    "background": "#f5f5f7",
+    "ratio": 15.46
+  },
+  {
+    "role": "Secondary / surface, light",
+    "foreground": "#626267",
+    "background": "#ffffff",
+    "ratio": 6.07
+  },
+  {
+    "role": "Accent / surface, light",
+    "foreground": "#0066cc",
+    "background": "#ffffff",
+    "ratio": 5.57
+  },
+  {
+    "role": "Content / surface, dark",
+    "foreground": "#f5f5f7",
+    "background": "#202023",
+    "ratio": 14.92
+  },
+  {
+    "role": "Secondary / surface, dark",
+    "foreground": "#a3a3ad",
+    "background": "#202023",
+    "ratio": 6.5
+  },
+  {
+    "role": "Accent / surface, dark",
+    "foreground": "#78b7ff",
+    "background": "#202023",
+    "ratio": 7.75
+  },
+  {
+    "role": "Primary button",
+    "foreground": "#ffffff",
+    "background": "#0969da",
+    "ratio": 5.19
+  }
+]

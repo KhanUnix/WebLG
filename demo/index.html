@@ -1,48 +1,347 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebLG — Three.js Demo</title>
-    <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/tweakpane@3.1.9/dist/tweakpane.min.js"></script>
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://esm.sh/three@0.152.2"
-        }
-    }
-    </script>
-</head>
-<body>
-
-    <canvas id="canvas"></canvas>
-
-    <!-- UI panels positioned over the glass lenses -->
-    <div class="ui-layer">
-
-        <div class="lens-panel panel-main" id="panel-main">
-            <h1>WebLG.</h1>
-            <p>Web Liquid Glass</p>
-            <a href="https://github.com/KhanUnix/WebLG" target="_blank" rel="noopener noreferrer" class="github-link">
-                <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
-                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                </svg>
-                <span>github</span>
-            </a>
+<!doctype html>
+<html lang="en" data-theme="light">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        <meta name="theme-color" content="#f5f5f7" />
+        <meta
+            name="description"
+            content="Explore WebLG glass, native controls and the light that passes through them."
+        />
+        <script>
+            try {
+                document.documentElement.dataset.theme =
+                    localStorage.getItem('weblg-appearance') === 'dark' ? 'dark' : 'light';
+            } catch {}
+        </script>
+        <title>WebLG — Material Studio</title>
+        <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
+        <link rel="stylesheet" href="../src/ui.css" />
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <a class="skip-link" href="#workspace">Skip to the studio</a>
+        <header class="app-header">
+            <a class="brand" href="./" aria-label="WebLG home"
+                ><img src="assets/mark.svg" alt="" width="32" height="32" /><span
+                    >WebLG<span class="brand-dot">.</span></span
+                ></a
+            >
+            <span class="product-name">Material Studio</span>
+            <nav aria-label="Resources" class="header-actions">
+                <select id="theme-choice" class="theme-choice" aria-label="Appearance">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
+                <button type="button" id="open-docs">
+                    Documentation <span aria-hidden="true">↗</span></button
+                ><a
+                    href="https://github.com/KhanUnix/WebLG"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >GitHub <span aria-hidden="true">↗</span></a
+                >
+            </nav>
+        </header>
+        <main id="workspace" class="workspace">
+            <div class="intro">
+                <div>
+                    <p class="eyebrow">One material. Many expressions.</p>
+                    <h1>Glass, in its element.</h1>
+                </div>
+                <p class="intro-copy">
+                    Explore light, texture and interaction.<br />A studio for adding depth to your
+                    interfaces.
+                </p>
+            </div>
+            <div class="studio-grid">
+                <section class="scene-column" aria-label="Interactive preview">
+                    <div class="scene-toolbar">
+                        <div class="scene-title">
+                            <span class="live-dot" aria-hidden="true"></span
+                            ><span id="render-status" role="status">Preparing the scene…</span>
+                        </div>
+                        <button
+                            class="plain-button compare-button"
+                            id="compare"
+                            type="button"
+                            aria-pressed="false"
+                        >
+                            <span class="compare-icon" aria-hidden="true">◐</span> Before / after
+                            <kbd>Space</kbd>
+                        </button>
+                    </div>
+                    <div class="exploration-toolbar">
+                        <div class="scene-views" role="group" aria-label="Scene view">
+                            <button type="button" data-view="explore" aria-pressed="true">
+                                Exploration
+                            </button>
+                            <button type="button" data-view="components" aria-pressed="false">
+                                Components
+                            </button>
+                        </div>
+                        <button type="button" id="reset-positions" class="plain-button">
+                            Reset positions
+                        </button>
+                    </div>
+                    <div class="scene" id="scene" data-background="photo" data-view="explore">
+                        <div class="scene-content" id="scene-content" role="tabpanel" tabindex="0">
+                            <p class="scene-caption">
+                                <span id="scene-caption">Natural light</span
+                                ><span class="caption-rule"></span><span>Material study</span>
+                            </p>
+                            <p class="sr-only" id="scene-description">
+                                A landscape photograph behind the glass controls. Use the keyboard
+                                to interact, or drag the panel by its handle.
+                            </p>
+                        </div>
+                        <section
+                            class="glass-console"
+                            id="glass-console"
+                            aria-label="Scene controls"
+                        >
+                            <header class="console-header">
+                                <div>
+                                    <span class="console-eyebrow">CONTROLS</span>
+                                    <h2>Through the glass.</h2>
+                                </div>
+                                <div class="console-tools" id="console-tools"></div>
+                            </header>
+                            <p class="console-description">
+                                Material follows light.<br />Find your own balance.
+                            </p>
+                            <div id="material-control" class="material-control"></div>
+                            <div class="console-divider"></div>
+                            <div class="demo-control-row">
+                                <label id="intensity-label">Refraction strength</label
+                                ><output id="intensity-output">50%</output>
+                            </div>
+                            <div id="slider-slot"></div>
+                            <div class="demo-control-row switch-row">
+                                <div>
+                                    <label id="animation-label">Animate background</label>
+                                    <p id="animation-status" role="status">Background motion.</p>
+                                </div>
+                                <div id="switch-slot"></div>
+                            </div>
+                            <div class="console-actions" id="console-actions"></div>
+                        </section>
+                        <div id="scene-tabs" class="scene-tabs"></div>
+                        <span class="comparison-badge" id="comparison-badge" hidden
+                            >Without glass effects</span
+                        >
+                    </div>
+                    <p id="drag-help" class="scene-help">
+                        Drag the three glass shapes across the background. Keyboard: arrow keys to
+                        move, Shift for precision, Home to center.
+                    </p>
+                    <div class="backgrounds">
+                        <div class="background-heading">
+                            <h2>The background makes the difference.</h2>
+                            <p>Each background reveals a different side of glass.</p>
+                        </div>
+                        <div class="background-options" role="group" aria-label="Scene background">
+                            <button
+                                type="button"
+                                class="background-option"
+                                data-background="photo"
+                                aria-pressed="true"
+                            >
+                                <span class="background-preview photo-preview"></span
+                                ><span>Landscape</span
+                                ><span class="background-check" aria-hidden="true">✓</span></button
+                            ><button
+                                type="button"
+                                class="background-option"
+                                data-background="texture"
+                                aria-pressed="false"
+                            >
+                                <span class="background-preview texture-preview"></span
+                                ><span>Texture</span
+                                ><span class="background-check" aria-hidden="true">✓</span></button
+                            ><button
+                                type="button"
+                                class="background-option"
+                                data-background="shapes"
+                                aria-pressed="false"
+                            >
+                                <span class="background-preview shapes-preview"></span
+                                ><span>Shapes</span
+                                ><span class="background-check" aria-hidden="true">✓</span></button
+                            ><button
+                                type="button"
+                                class="background-option"
+                                data-background="mixed"
+                                aria-pressed="false"
+                            >
+                                <span class="background-preview mixed-preview"></span
+                                ><span>Mixed</span
+                                ><span class="background-check" aria-hidden="true">✓</span>
+                            </button>
+                        </div>
+                        <label class="upload-button" for="image-upload"
+                            ><span aria-hidden="true">＋</span> Your image<input
+                                type="file"
+                                id="image-upload"
+                                accept="image/*"
+                                class="sr-only"
+                        /></label>
+                    </div>
+                </section>
+                <aside class="inspector" aria-labelledby="inspector-title">
+                    <div class="inspector-header">
+                        <div>
+                            <p class="eyebrow">Inspector</p>
+                            <h2 id="inspector-title">Fine-tune the material.</h2>
+                        </div>
+                        <button
+                            type="button"
+                            class="reset-button"
+                            id="reset"
+                            aria-label="Default config"
+                            title="Default config"
+                        >
+                            ↺
+                        </button>
+                    </div>
+                    <div class="inspector-section">
+                        <label class="field-label" for="component-select">Lens</label
+                        ><select id="component-select">
+                            <option>Floating panel</option>
+                        </select>
+                        <p class="field-hint">Select a glass element in the scene to inspect it.</p>
+                    </div>
+                    <fieldset class="inspector-section preset-fieldset">
+                        <legend>Material</legend>
+                        <div class="preset-grid">
+                            <label class="original-preset"
+                                ><input
+                                    type="radio"
+                                    name="material"
+                                    value="original"
+                                    checked
+                                /><span class="preset-swatch original-swatch"></span
+                                ><span>Original</span></label
+                            >
+                            <label
+                                ><input type="radio" name="material" value="clear" /><span
+                                    class="preset-swatch clear-swatch"
+                                ></span
+                                ><span>Clear</span></label
+                            ><label
+                                ><input type="radio" name="material" value="satin" /><span
+                                    class="preset-swatch satin-swatch"
+                                ></span
+                                ><span>Satin</span></label
+                            ><label
+                                ><input type="radio" name="material" value="frosted" /><span
+                                    class="preset-swatch frosted-swatch"
+                                ></span
+                                ><span>Frosted</span></label
+                            ><label
+                                ><input type="radio" name="material" value="tinted" /><span
+                                    class="preset-swatch tinted-swatch"
+                                ></span
+                                ><span>Tinted</span></label
+                            >
+                        </div>
+                    </fieldset>
+                    <div class="inspector-section settings" id="optical-settings"></div>
+                    <details class="inspector-section advanced">
+                        <summary>Liquid Animation</summary>
+                        <div id="liquid-settings" class="settings"></div>
+                    </details>
+                    <details class="inspector-section advanced">
+                        <summary>Advanced optics</summary>
+                        <div id="advanced-settings" class="settings"></div>
+                    </details>
+                    <details class="inspector-section advanced">
+                        <summary>Performance on this device</summary>
+                        <p id="performance-result" class="field-hint">
+                            Measure idle and moving-glass frame rates on your screen.
+                        </p>
+                        <button type="button" id="measure-performance" class="code-button">
+                            Measure performance
+                        </button>
+                    </details>
+                    <div class="inspector-section accessibility-option">
+                        <label for="solid-mode">Reduce transparency</label
+                        ><input type="checkbox" role="switch" id="solid-mode" />
+                        <p>Opaque surfaces with the same controls.</p>
+                    </div>
+                    <div class="inspector-section inspector-footer">
+                        <button type="button" class="code-button" id="show-code">
+                            <span aria-hidden="true">〈/〉</span> View code
+                        </button>
+                        <p>Native components.<br />An independent glass engine.</p>
+                    </div>
+                </aside>
+            </div>
+            <footer class="page-footer">
+                <p>Light does the rest.</p>
+                <span>WebGL · Framework-free · Made to explore</span>
+            </footer>
+        </main>
+        <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+            <span id="toast-message"></span
+            ><button type="button" id="toast-close" aria-label="Dismiss message">×</button>
         </div>
-
-        <div class="lens-panel panel-circle" id="panel-circle">
-            <span class="icon">&#9672;</span>
-        </div>
-
-        <div class="lens-panel panel-pill" id="panel-pill">
-            <p>- 667 -</p>
-        </div>
-
-    </div>
-
-    <script type="module" src="main.js"></script>
-</body>
+        <dialog id="documentation" aria-labelledby="documentation-title">
+            <div class="dialog-header">
+                <div>
+                    <p class="eyebrow">WebLG</p>
+                    <h2 id="documentation-title">From glass to interface.</h2>
+                </div>
+                <form method="dialog">
+                    <button type="submit" class="dialog-close" aria-label="Close documentation">
+                        ✕
+                    </button>
+                </form>
+            </div>
+            <div class="dialog-body">
+                <p>
+                    WebLG pairs an optical engine with native HTML components. Buttons, switches,
+                    sliders, tabs and menus keep their interactions and accessibility.
+                </p>
+                <div class="doc-columns">
+                    <div>
+                        <h3>In the studio</h3>
+                        <ul>
+                            <li>Drag the panel by its handle, or use the arrow keys.</li>
+                            <li>Select a component, then adjust its material.</li>
+                            <li>Hold Space outside form controls to compare.</li>
+                            <li>
+                                Try a texture or your own image. Your image stays in your browser.
+                            </li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>In your project</h3>
+                        <ul>
+                            <li>
+                                A standalone WebGL engine, a Three.js adapter and a framework-free
+                                UI API.
+                            </li>
+                            <li>
+                                The background can be an image, a canvas or a scene rendered to a
+                                texture.
+                            </li>
+                            <li>
+                                Glass layers are composed on the GPU while HTML text stays sharp.
+                            </li>
+                            <li>Motion, contrast and transparency preferences are respected.</li>
+                        </ul>
+                    </div>
+                </div>
+                <h3 id="code-title">Your first component</h3>
+                <pre><code id="code-preview"></code></pre>
+                <button type="button" class="code-button" id="copy-code">Copy code</button>
+                <p class="doc-note">
+                    The web rendering follows Apple’s material and interaction principles. It is
+                    built with WebLG and has no Apple framework dependencies.
+                </p>
+            </div>
+        </dialog>
+        <script type="module" src="main.js"></script>
+    </body>
 </html>

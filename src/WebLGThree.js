@@ -1,9 +1,10 @@
 import {
-    Vector2, Vector4,
+    Vector2,
     RawShaderMaterial, BufferGeometry, BufferAttribute,
     Mesh, Scene, Camera,
 } from 'three';
 import { LENS_DEFAULTS, MAX_LENSES, loadShaders, getDefaultShadersPath } from './shaders.js';
+import { createLensUniforms, writeLensUniforms } from './lens-uniforms.js';
 
 const _size = new Vector2();
 
@@ -31,6 +32,8 @@ export class WebLGThree {
         this._renderer = renderer;
         this._lenses = new Map();
         this._nextId = 0;
+        this._lensUniforms = createLensUniforms();
+        this._clearMaterial = null;
 
         this._material = new RawShaderMaterial({
             vertexShader,
@@ -39,17 +42,20 @@ export class WebLGThree {
                 tMap:         { value: null },
                 uResolution:  { value: new Vector2() },
                 uTime:        { value: 0 },
+                uLightDirection: { value: new Vector2(-Math.SQRT1_2, Math.SQRT1_2) },
                 uLensCount:   { value: 0 },
-                uLensRects:   { value: Array.from({ length: MAX_LENSES }, () => new Vector4()) },
-                uLensParams0: { value: Array.from({ length: MAX_LENSES }, () => new Vector4(10, 20, 3, 5)) },
-                uLensParams1: { value: Array.from({ length: MAX_LENSES }, () => new Vector4(0.7, 0, 0, 0)) },
+                uLensRects:   { value: this._lensUniforms.rects },
+                uLensParams0: { value: this._lensUniforms.params0 },
+                uLensParams1: { value: this._lensUniforms.params1 },
             },
             depthTest: false,
             depthWrite: false,
         });
 
         const geo = new BufferGeometry();
-        geo.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 3, -1, -1, 3]), 2));
+        // Three.js computes geometry bounds as 3D positions, even though this
+        // fullscreen shader only consumes x/y. Supply z=0 to keep them finite.
+        geo.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
         geo.setAttribute('uv',       new BufferAttribute(new Float32Array([0, 0, 2, 0, 0, 2]), 2));
 
         this._mesh = new Mesh(geo, this._material);
@@ -61,6 +67,11 @@ export class WebLGThree {
     }
 
     // ── Public API ──────────────────────────────────────────
+
+    setLightAngle(degrees = 135) {
+        const angle = degrees * Math.PI / 180;
+        this._material.uniforms.uLightDirection.value.set(Math.cos(angle), Math.sin(angle));
+    }
 
     setBackground(texture) {
         this._material.uniforms.tMap.value = texture;
@@ -102,7 +113,7 @@ export class WebLGThree {
         const canvasRect = canvas && typeof canvas.getBoundingClientRect === 'function'
             ? canvas.getBoundingClientRect()
             : null;
-        renderer.getSize(_size);
+        if (!canvasRect) renderer.getSize(_size);
         const dpr  = renderer.getPixelRatio();
         const cssW = canvasRect ? canvasRect.width : _size.x;
         const cssH = canvasRect ? canvasRect.height : _size.y;
@@ -114,47 +125,40 @@ export class WebLGThree {
         u.uTime.value = time;
 
         let idx = 0;
-        for (const [, lens] of this._lenses) {
+        let clearOnly = true;
+        for (const lens of this._lenses.values()) {
             if (idx >= MAX_LENSES) break;
-
-            let x, y, w, h;
-            if (lens.element) {
-                const r = lens.element.getBoundingClientRect();
-                const left = canvasRect ? canvasRect.left : 0;
-                const bottom = canvasRect ? canvasRect.bottom : cssH;
-                x = (r.left - left) * dpr;
-                y = (bottom - r.bottom) * dpr;
-                w = r.width  * dpr;
-                h = r.height * dpr;
-            } else if (lens.rect) {
-                x = lens.rect.x      * dpr;
-                y = (cssH - lens.rect.y - lens.rect.height) * dpr;
-                w = lens.rect.width   * dpr;
-                h = lens.rect.height  * dpr;
-            } else {
-                x = y = w = h = 0;
-            }
-
-            u.uLensRects.value[idx].set(x, y, w, h);
-            u.uLensParams0.value[idx].set(
-                lens.smoothness, lens.edgeSpread, lens.frosted, lens.pinch);
-            u.uLensParams1.value[idx].set(
-                lens.chroma, lens.turbulence, lens.liquidity, 0);
+            writeLensUniforms(this._lensUniforms, idx, lens, dpr, cssH, canvasRect);
+            if (!(lens.frosted <= 0.01)) clearOnly = false;
             idx++;
         }
         u.uLensCount.value = idx;
+        if (idx > 0 && clearOnly) {
+            if (!this._clearMaterial) {
+                this._clearMaterial = this._material.clone();
+                this._clearMaterial.uniforms = this._material.uniforms;
+                this._clearMaterial.defines = { ...this._material.defines, WEBLG_CLEAR_ONLY: 1 };
+            }
+            this._mesh.material = this._clearMaterial;
+        } else {
+            this._mesh.material = this._material;
+        }
 
         const prevRT        = renderer.getRenderTarget();
         const prevAutoClear = renderer.autoClear;
         renderer.autoClear  = false;
         renderer.setRenderTarget(null);
-        renderer.render(this._scene, this._camera);
-        renderer.setRenderTarget(prevRT);
-        renderer.autoClear = prevAutoClear;
+        try {
+            renderer.render(this._scene, this._camera);
+        } finally {
+            renderer.setRenderTarget(prevRT);
+            renderer.autoClear = prevAutoClear;
+        }
     }
 
     dispose() {
         this._material.dispose();
+        this._clearMaterial?.dispose();
         this._mesh.geometry.dispose();
         this._lenses.clear();
     }
