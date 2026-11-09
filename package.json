@@ -4,14 +4,25 @@
   "description": "Liquid Glass effect library for WebGL and Three.js.",
   "type": "module",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./core": "./src/WebLG.js",
+    "./three": "./src/WebLGThree.js",
+    "./stage": "./src/stage.js",
+    "./ui": "./src/ui.js",
+    "./ui.css": "./src/ui.css"
   },
   "files": [
     "src",
-    "README.md"
+    "README.md",
+    "docs"
   ],
   "scripts": {
-    "demo": "node scripts/demo-server.mjs"
+    "demo": "node scripts/demo-server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:render": "node scripts/verify-rendering.mjs",
+    "test:stage": "node scripts/verify-rendering.mjs --stage-only",
+    "benchmark": "node scripts/verify-rendering.mjs --benchmark",
+    "test:studio": "node scripts/verify-studio.mjs"
   },
   "peerDependencies": {
     "three": ">=0.152.0"
@@ -29,5 +40,9 @@
     "glass",
     "frosted-glass"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "three": "0.152.2"
+  }
 }

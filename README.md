@@ -18,6 +18,10 @@ src/
 ├── shaders.js             Constants, defaults, loadShaders()
 ├── WebLGThree.js          Three.js adapter (RawShaderMaterial)
 ├── WebLG.js               Pure WebGL core
+├── lens-uniforms.js       Shared optical parameter packing
+├── stage.js               Layered GPU composition
+├── ui.js                  Native HTML controls
+├── ui.css                 Scoped control styles
 └── index.js               Re-exports
 ```
 
@@ -93,6 +97,31 @@ npm run demo
 Then open **http://localhost:4000/demo/** in your browser.
 
 Pure ES modules.
+
+
+## Material Studio and native UI
+
+The demo is a self-contained material workshop: directional edge light,
+clear/satin/frosted/tinted presets, native buttons, switches, sliders, segmented
+controls, tabs and menus, a movable panel, per-component inspection, four
+backgrounds, local image import, and an effect comparison mode.
+
+`WebLGStage` adds optional GPU layer composition; `WebLGUI` supplies
+framework-independent HTML controls. The raw core and Three.js adapter remain
+available separately. Read the [UI and stage guide](docs/ui.md) for imports,
+examples, lifecycle and accessibility behaviour.
+
+## Performance and validation
+
+WebLG keeps its 32-sample frosted blur and automatically uses a lighter shader
+for entirely clear scenes. Zero dispersion avoids redundant colour-channel
+blurs, lens uniform uploads are batched, and shader source loads are shared.
+No new production dependency or render pass is required.
+
+See [performance notes, measurements and regression checks](docs/performance.md)
+for details and reproducible commands. Run `npm test` for loader checks,
+`npm run test:render` for browser pixel comparisons, and `npm run benchmark`
+for synchronized reference/current measurements.
 
 ## Three.js Integration (WebLGThree)
 
