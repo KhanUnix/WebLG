@@ -102,6 +102,10 @@ layers follow the moving DOM rectangles; overlapping surfaces retain their layer
 order. Components switches to the functional control panel. Both views share the
 same backgrounds and inspector. Reposition restores the layout without changing
 materials, and all drag listeners/observers are disposed on page teardown.
+The page footer's `Copy selected parameters` action copies the selected component's
+name, displayed optical values and light direction as JSON. It is disabled until
+an element is selected. If clipboard access fails, the JSON opens in the
+documentation dialog for manual copying.
 
 ## First control
 

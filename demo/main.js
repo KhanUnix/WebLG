@@ -12,6 +12,7 @@ import {
 
 const $ = (selector) => document.querySelector(selector);
 const host = $('#scene');
+const copySelectedButton = $('#copy-selected-parameters');
 const state = {
     background: 'photo',
     material: 'original',
@@ -411,7 +412,9 @@ function uncheckCustom() {
     });
 }
 function syncInspector() {
-    if (!selected) return;
+    copySelectedButton.disabled = !selected || !ui.surfaces.has(selected.id);
+    if (copySelectedButton.disabled) return;
+    copySelectedButton.title = `Copy parameters for ${selected.label}`;
     for (const [key, controls] of fields) {
         let value = key === 'lightAngle' ? stage.lightAngle : (selected.config[key] ?? 0);
         controls.range.value = value;
@@ -558,6 +561,20 @@ function configuration() {
         lightAngle: stage.lightAngle,
     };
 }
+copySelectedButton.addEventListener('click', async () => {
+    if (!selected || !ui.surfaces.has(selected.id)) return;
+    const { lightAngle, ...material } = Object.fromEntries(
+        definitions.map(({ key }) => [key, Number(fields.get(key).number.value)]),
+    );
+    const text = JSON.stringify({ component: selected.label, material, lightAngle }, null, 2);
+    try {
+        await navigator.clipboard.writeText(text);
+        toast('Selected parameters copied.');
+    } catch {
+        showDocs(text);
+        toast('Select the parameters to copy them.');
+    }
+});
 async function copyStyle() {
     const text = JSON.stringify(
         {

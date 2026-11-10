@@ -747,11 +747,21 @@ select {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
     border-top: 1px solid var(--line);
     margin-top: 32px;
     padding: 20px 0 2px;
     color: var(--secondary);
     gap: 16px;
+}
+.page-footer .copy-selected-button {
+    min-height: 44px;
+    max-width: 100%;
+    flex-shrink: 0;
+}
+.copy-selected-button:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 .page-footer p {
     font-size: 0.75rem;
@@ -1126,6 +1136,10 @@ pre {
     .reset-button {
         width: 44px;
         height: 44px;
+    }
+    .page-footer .copy-selected-button {
+        width: 100%;
+        margin-top: 8px;
     }
     .page-footer {
         align-items: start;
